@@ -39,7 +39,6 @@ wigner-seitz-defect-analysis <lammps_file> [output_base] --reference <ref_file> 
 | `--threads <int>` | No | Maximum worker threads. | auto |
 | `--help` | No | Print CLI help. | |
 
-> The legacy `--referenceFrame` flag is still accepted as an alias for `--reference`.
 > The current and reference configurations may (and usually do) have different atom counts -
 > that mismatch is how vacancies and interstitials are detected.
 

@@ -39,10 +39,8 @@ VOLT_PLUGIN_MAIN(descriptor,
     [](const auto& opts, const LammpsParser::Frame& frame,
        const LammpsParser::Frame* /*refFramePtr: unused, guard bypassed*/,
        const std::string& outputBase) -> Volt::Plugin::json {
-        // Resolve the reference dump path. Prefer the modern --reference flag;
-        // fall back to the legacy --referenceFrame name for back-compat.
+        // Resolve the reference dump path from the --reference flag.
         std::string refFile = CLI::getString(opts, "--reference");
-        if(refFile.empty()) refFile = CLI::getString(opts, "--referenceFrame");
         if(refFile.empty()){
             return AnalysisResult::failure(
                 "--reference is required for Wigner-Seitz defect analysis");
