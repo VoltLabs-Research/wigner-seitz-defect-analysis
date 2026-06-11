@@ -1,6 +1,6 @@
 {
   "name": "@voltlabs/wigner-seitz-defect-analysis",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "kind": "workflow",
   "publisher": "voltlabs",
   "description": "Wigner-Seitz defect analysis: classifies reference lattice sites as vacancy/occupied/interstitial/antisite by occupancy against a current configuration.",

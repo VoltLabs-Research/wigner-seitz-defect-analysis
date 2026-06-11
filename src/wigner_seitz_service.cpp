@@ -46,8 +46,7 @@ std::string roleName(int siteOccupancy, bool isAntisite){
 WignerSeitzService::WignerSeitzService()
     : _affineMapping(WignerSeitzEngine::AffineMappingType::Off),
       _eliminateCellDeformation(false),
-      _useMinimumImageConvention(true),
-      _perTypeOccupancies(false){}
+      _useMinimumImageConvention(true){}
 
 void WignerSeitzService::setAffineMapping(WignerSeitzEngine::AffineMappingType mode){
     _affineMapping = mode;
@@ -59,10 +58,6 @@ void WignerSeitzService::setEliminateCellDeformation(bool enabled){
 
 void WignerSeitzService::setMinimumImageConvention(bool enabled){
     _useMinimumImageConvention = enabled;
-}
-
-void WignerSeitzService::setPerTypeOccupancies(bool enabled){
-    _perTypeOccupancies = enabled;
 }
 
 json WignerSeitzService::compute(
@@ -99,12 +94,11 @@ json WignerSeitzService::compute(
     auto refTypes = maybeCreateTypeProperty(referenceFrame);
 
     spdlog::info(
-        "Starting Wigner-Seitz analysis (ref_sites={}, current_atoms={}, affine={}, mic={}, per_type={})...",
+        "Starting Wigner-Seitz analysis (ref_sites={}, current_atoms={}, affine={}, mic={})...",
         referenceFrame.natoms,
         frame.natoms,
         static_cast<int>(_affineMapping),
-        _useMinimumImageConvention ? "true" : "false",
-        _perTypeOccupancies ? "true" : "false"
+        _useMinimumImageConvention ? "true" : "false"
     );
 
     WignerSeitzEngine engine(
@@ -116,8 +110,7 @@ json WignerSeitzService::compute(
         referenceFrame.simulationCell,
         _affineMapping,
         _eliminateCellDeformation,
-        _useMinimumImageConvention,
-        _perTypeOccupancies
+        _useMinimumImageConvention
     );
 
     try{
@@ -131,7 +124,6 @@ json WignerSeitzService::compute(
 
     const std::size_t nRef = static_cast<std::size_t>(referenceFrame.natoms);
     const std::size_t nCurr = static_cast<std::size_t>(frame.natoms);
-    const std::size_t ptypeCount = engine.ptypeCount();
 
     // Build the per-site summary payload (written to _wigner_seitz.parquet).
     json result = AnalysisResult::success();
@@ -141,21 +133,13 @@ json WignerSeitzService::compute(
         { "antisite_count", engine.antisiteCount() },
         { "occupied_count", engine.occupiedCount() },
         { "total_sites", nRef },
-        { "total_current_atoms", nCurr },
-        { "per_type_components", ptypeCount }
+        { "total_current_atoms", nCurr }
     };
 
     json perSite = json::array();
     if(occupancyProp){
         const int* occ = occupancyProp->constDataInt();
         for(std::size_t i = 0; i < nRef; ++i){
-            int total = 0;
-            json components = json::array();
-            for(std::size_t c = 0; c < ptypeCount; ++c){
-                int v = occ[i * ptypeCount + c];
-                total += v;
-                components.push_back(v);
-            }
             const Point3 sitePos = (i < referenceFrame.positions.size())
                 ? referenceFrame.positions[i]
                 : Point3::Origin();
@@ -166,10 +150,7 @@ json WignerSeitzService::compute(
             site["site_index"] = i;
             site["site_id"] = siteId;
             site["pos"] = { sitePos.x(), sitePos.y(), sitePos.z() };
-            site["occupancy"] = total;
-            if(ptypeCount > 1){
-                site["occupancy_per_type"] = components;
-            }
+            site["occupancy"] = occ[i];
             perSite.push_back(site);
         }
     }
@@ -211,21 +192,12 @@ json WignerSeitzService::compute(
     std::vector<int> recId;
     std::vector<std::string> recRole;
     std::vector<int> recOccupancy;
-    std::vector<std::size_t> recSiteIndex;
-    std::vector<std::vector<double>> recPerType;
 
     // Pass 1: per-site role assignment (Vacancy / Occupied / Antisite / Interstitial).
     if(occupancyProp){
         const int* occ = occupancyProp->constDataInt();
         for(std::size_t s = 0; s < nRef; ++s){
-            int total = 0;
-            std::vector<double> components;
-            components.reserve(ptypeCount);
-            for(std::size_t c = 0; c < ptypeCount; ++c){
-                const int v = occ[s * ptypeCount + c];
-                total += v;
-                components.push_back(static_cast<double>(v));
-            }
+            const int total = occ[s];
 
             const bool antisiteHere = siteIsAntisite[s];
             const std::string role = roleName(total, antisiteHere);
@@ -256,10 +228,6 @@ json WignerSeitzService::compute(
             recId.push_back(atomId);
             recRole.push_back(role);
             recOccupancy.push_back(total);
-            recSiteIndex.push_back(s);
-            // Parity with OVITO's WignerSeitzAnalysisModifier OccupancyNumbers
-            // multi-component output: keep the per-type occupancy counts per record.
-            recPerType.push_back(ptypeCount > 1 ? components : std::vector<double>{});
         }
     }
 
@@ -280,8 +248,6 @@ json WignerSeitzService::compute(
             recId.push_back(atomId);
             recRole.push_back("Interstitial");
             recOccupancy.push_back(static_cast<int>(occupants.size()));
-            recSiteIndex.push_back(s);
-            recPerType.push_back(std::vector<double>{});
         }
     }
 
@@ -303,10 +269,6 @@ json WignerSeitzService::compute(
             .bucketResolver = [&recRole](std::size_t i){ return recRole[i]; }, // bucket == role
             .perAtomColumnWriter = [&](ColumnarAtomWriter& w, std::size_t i){
                 w.field("occupancy", recOccupancy[i]);
-                w.field("site_index", static_cast<int>(recSiteIndex[i]));
-                if(ptypeCount > 1 && !recPerType[i].empty()){
-                    w.field("occupancy_per_type", recPerType[i]); // list<double>
-                }
             }
         }); // also writes <base>_atoms.parquet from wsFrame
     }

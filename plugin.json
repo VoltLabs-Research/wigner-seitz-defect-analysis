@@ -15,7 +15,7 @@
             "icon": "HiViewGridAdd",
             "author": "Rodolfo Herrera",
             "license": "MIT",
-            "version": "1.0.0",
+            "version": "1.0.2",
             "homepage": "https://github.com/rodyherrera/Volterra",
             "description": "Identifica vacancias, intersticiales y antisitios comparando la configuración actual con una red de referencia mediante celdas de Wigner-Seitz."
           }
@@ -59,12 +59,6 @@
                 "type": "boolean",
                 "label": "Minimum Image Convention",
                 "default": true
-              },
-              {
-                "argument": "perTypeOccupancies",
-                "type": "boolean",
-                "label": "Per-Type Occupancies",
-                "default": false
               }
             ]
           }
@@ -144,8 +138,7 @@
             "results": "atoms.parquet",
             "iterable": "",
             "properties": [
-              { "key": "occupancy", "label": "Site occupancy", "type": "int" },
-              { "key": "site_index", "label": "Reference site index", "type": "int" }
+              { "key": "occupancy", "label": "Site occupancy", "type": "int" }
             ]
           }
         }

@@ -49,8 +49,7 @@ WignerSeitzEngine::WignerSeitzEngine(
     const SimulationCell& refCell,
     AffineMappingType affineMapping,
     bool eliminateCellDeformation,
-    bool useMinimumImageConvention,
-    bool perTypeOccupancies
+    bool useMinimumImageConvention
 )
     : _positions(positions),
       _types(types),
@@ -60,8 +59,7 @@ WignerSeitzEngine::WignerSeitzEngine(
       _simCellRef(refCell),
       _affineMapping(affineMapping),
       _eliminateCellDeformation(eliminateCellDeformation),
-      _useMinimumImageConvention(useMinimumImageConvention),
-      _perTypeOccupancies(perTypeOccupancies){}
+      _useMinimumImageConvention(useMinimumImageConvention){}
 
 void WignerSeitzEngine::prepareMappedPositions(std::vector<Point3>& mappedPositions) const{
     const std::size_t nCurr = _positions->size();
@@ -128,29 +126,10 @@ void WignerSeitzEngine::perform(){
         return;
     }
 
-    // Determine the number of particle-type columns when per-type
-    // occupancies are requested.
-    std::size_t ptypeCount = 1;
-    if(_perTypeOccupancies && _types){
-        int maxType = 0;
-        const int* t = _types->constDataInt();
-        for(std::size_t i = 0; i < nCurr; ++i){
-            if(t[i] > maxType) maxType = t[i];
-        }
-        if(_refTypes){
-            const int* rt = _refTypes->constDataInt();
-            for(std::size_t i = 0; i < nRef; ++i){
-                if(rt[i] > maxType) maxType = rt[i];
-            }
-        }
-        ptypeCount = std::max<std::size_t>(1, static_cast<std::size_t>(maxType));
-    }
-    _ptypeCount = ptypeCount;
-
     // Use the explicit (count, DataType, componentCount, stride, init) ctor
     // because UserProperty maps to DataType::Void which rejects components>0.
     _occupancy = std::make_shared<ParticleProperty>(
-        nRef, Particles::DataType::Int, ptypeCount, 0, true
+        nRef, Particles::DataType::Int, 1, 0, true
     );
     _occupancy->setType(ParticleProperty::UserProperty);
     _siteIdentifier = std::make_shared<ParticleProperty>(
@@ -206,7 +185,7 @@ void WignerSeitzEngine::perform(){
     prepareMappedPositions(mappedCurrent);
 
     // Atomic counters driving thread-safe occupancy updates.
-    std::vector<std::atomic<int>> atomicOccupancy(nRef * ptypeCount);
+    std::vector<std::atomic<int>> atomicOccupancy(nRef);
     for(auto& c : atomicOccupancy) c.store(0, std::memory_order_relaxed);
 
     std::atomic<std::size_t> antisiteLocal{0};
@@ -233,15 +212,7 @@ void WignerSeitzEngine::perform(){
                 const std::size_t siteIndex = res[0].index;
                 _currentToSite[i] = siteIndex;
 
-                std::size_t component = 0;
-                if(_perTypeOccupancies && currTypes){
-                    const int t = currTypes[i];
-                    if(t >= 1 && static_cast<std::size_t>(t) <= ptypeCount){
-                        component = static_cast<std::size_t>(t - 1);
-                    }
-                }
-                atomicOccupancy[siteIndex * ptypeCount + component]
-                    .fetch_add(1, std::memory_order_relaxed);
+                atomicOccupancy[siteIndex].fetch_add(1, std::memory_order_relaxed);
 
                 if(refTypesPtr && currTypes){
                     if(refTypesPtr[siteIndex] != currTypes[i]){
@@ -254,16 +225,13 @@ void WignerSeitzEngine::perform(){
 
     // Commit atomic occupancy into the output property.
     int* occData = _occupancy->dataInt();
-    for(std::size_t i = 0; i < nRef * ptypeCount; ++i){
+    for(std::size_t i = 0; i < nRef; ++i){
         occData[i] = atomicOccupancy[i].load(std::memory_order_relaxed);
     }
 
     // Tally site statistics.
     for(std::size_t i = 0; i < nRef; ++i){
-        int total = 0;
-        for(std::size_t c = 0; c < ptypeCount; ++c){
-            total += occData[i * ptypeCount + c];
-        }
+        const int total = occData[i];
         if(total == 0){
             ++_vacancyCount;
         }else{

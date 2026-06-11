@@ -28,7 +28,6 @@ static const Volt::Plugin::PluginDescriptor descriptor{
         {"--affineMapping", "string", "off|toReference|toCurrent", "off"},
         {"--eliminateCellDeformation", "bool", "Eliminate cell deformation before site assignment", "false"},
         {"--minimumImageConvention", "bool", "Use minimum image convention for site assignment", "true"},
-        {"--perTypeOccupancies", "bool", "Emit occupancy counts split by particle type", "false"},
     },
     // CHOICE 1: see comment above. The reference frame is parsed manually in
     // the run lambda so the natoms-match guard never runs.
@@ -58,7 +57,6 @@ VOLT_PLUGIN_MAIN(descriptor,
         svc.setAffineMapping(parseAffineMapping(CLI::getString(opts, "--affineMapping", "off")));
         svc.setEliminateCellDeformation(CLI::getBool(opts, "--eliminateCellDeformation", false));
         svc.setMinimumImageConvention(CLI::getBool(opts, "--minimumImageConvention", true));
-        svc.setPerTypeOccupancies(CLI::getBool(opts, "--perTypeOccupancies", false));
 
         return svc.compute(frame, referenceFrame, outputBase);
     })

@@ -41,14 +41,13 @@ public:
         const Particles::SimulationCell& refCell,
         AffineMappingType affineMapping = AffineMappingType::Off,
         bool eliminateCellDeformation = false,
-        bool useMinimumImageConvention = true,
-        bool perTypeOccupancies = false
+        bool useMinimumImageConvention = true
     );
 
     void perform();
 
-    // Occupancy per reference site. componentCount == 1 by default, or
-    // ptypeCount when per-type occupancies are requested.
+    // Occupancy per reference site (scalar count of current atoms assigned to
+    // each Wigner-Seitz cell).
     std::shared_ptr<Particles::ParticleProperty> occupancy() const{
         return _occupancy;
     }
@@ -70,8 +69,6 @@ public:
     std::size_t interstitialCount() const{ return _interstitialCount; }
     std::size_t antisiteCount() const{ return _antisiteCount; }
     std::size_t occupiedCount() const{ return _occupiedCount; }
-    std::size_t ptypeCount() const{ return _ptypeCount; }
-    bool perTypeOccupancies() const{ return _perTypeOccupancies; }
 
 private:
     // Build the list of current positions transformed into the reference
@@ -89,7 +86,6 @@ private:
     AffineMappingType _affineMapping = AffineMappingType::Off;
     bool _eliminateCellDeformation = false;
     bool _useMinimumImageConvention = true;
-    bool _perTypeOccupancies = false;
 
     std::shared_ptr<Particles::ParticleProperty> _occupancy;
     std::shared_ptr<Particles::ParticleProperty> _siteIdentifier;
@@ -99,7 +95,6 @@ private:
     std::size_t _interstitialCount = 0;
     std::size_t _antisiteCount = 0;
     std::size_t _occupiedCount = 0;
-    std::size_t _ptypeCount = 0;
 };
 
 }

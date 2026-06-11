@@ -23,7 +23,6 @@ public:
     void setAffineMapping(WignerSeitzEngine::AffineMappingType mode);
     void setEliminateCellDeformation(bool enabled);
     void setMinimumImageConvention(bool enabled);
-    void setPerTypeOccupancies(bool enabled);
 
     /**
      * Run the analysis. The reference frame is required and must contain a
@@ -45,7 +44,6 @@ private:
     WignerSeitzEngine::AffineMappingType _affineMapping;
     bool _eliminateCellDeformation;
     bool _useMinimumImageConvention;
-    bool _perTypeOccupancies;
 };
 
 }

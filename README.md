@@ -35,7 +35,6 @@ wigner-seitz-defect-analysis <lammps_file> [output_base] --reference <ref_file> 
 | `--affineMapping <mode>` | No | Affine mapping mode: `off`, `toReference`, `toCurrent`. | `off` |
 | `--eliminateCellDeformation` | No | Eliminate cell deformation before site assignment (currently a no-op in the engine). | `false` |
 | `--minimumImageConvention <bool>` | No | Use minimum image convention for site assignment. | `true` |
-| `--perTypeOccupancies` | No | Emit occupancy counts split by particle type. | `false` |
 | `--threads <int>` | No | Maximum worker threads. | auto |
 | `--help` | No | Print CLI help. | |
 
@@ -53,5 +52,5 @@ Two Parquet files are produced under `{output_base}_*.parquet`:
   D-009). The rows are the reference sites plus extra interstitial occupants (a
   synthetic frame), so vacancies - which have no current atom - are represented.
   The `bucket` column holds the role (`Vacancy`, `Occupied`, `Interstitial`,
-  `Antisite`) and drives the `AtomisticExporter` GLB grouping. Per-atom columns:
-  `occupancy`, `site_index`, and `occupancy_per_type` (when `--perTypeOccupancies`).
+  `Antisite`) and drives the `AtomisticExporter` GLB grouping. The only per-atom
+  column is `occupancy` (the count of current atoms assigned to the site).
