@@ -1,0 +1,20 @@
+{
+  "name": "@voltlabs/wigner-seitz-defect-analysis",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "publisher": "voltlabs",
+  "description": "Wigner-Seitz defect analysis: classifies reference lattice sites as vacancy/occupied/interstitial/antisite by occupancy against a current configuration.",
+  "license": "MIT",
+  "homepage": "https://github.com/voltlabs-research/wigner-seitz-defect-analysis",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/voltlabs-research/wigner-seitz-defect-analysis"
+  },
+  "entrypoints": {
+    "binary": "wigner-seitz-defect-analysis-plugin.zip",
+    "workflow": "plugin.json"
+  },
+  "platforms": ["linux-x86_64", "darwin-arm64", "windows-x86_64"],
+  "coretoolkit": "1.0.0",
+  "files": ["plugin.json", "bin", "lib"]
+}
