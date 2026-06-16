@@ -1,56 +1,37 @@
-# WignerSeitzDefectAnalysis
+# Wigner-Seitz Defect Analysis
 
-`WignerSeitzDefectAnalysis` identifies vacancies, interstitials and antisites by comparing
-a current atomic configuration against a reference lattice using Wigner-Seitz cells.
+Identifies vacancies, interstitials and antisites by comparing the current configuration against a reference lattice using Wigner-Seitz cells.
 
-## One-Command Install
-
-```bash
-curl -sSL https://raw.githubusercontent.com/VoltLabs-Research/CoreToolkit/main/scripts/install-plugin.sh | bash -s -- WignerSeitzDefectAnalysis
-```
-
-## Build
+## Install
 
 ```bash
-conan install . --build=missing -s compiler.cppstd=17 -o boost/*:without_stacktrace=True
-cmake --preset conan-release
-cmake --build --preset conan-release
+vpm install @voltlabs/wigner-seitz-defect-analysis
 ```
 
 ## CLI
 
-Usage:
-
 ```bash
-wigner-seitz-defect-analysis <lammps_file> [output_base] --reference <ref_file> [options]
+wigner-seitz-defect-analysis <input_dump> [output_base] --reference <ref_file> [options]
 ```
 
-### Arguments
+| Argument | Required | Default | Description |
+|---|---|---|---|
+| `<input_dump>` | yes | — | Input LAMMPS dump (current configuration). |
+| `[output_base]` | no | derived from input | Base path for output files. |
+| `--reference <path>` | yes | — | Reference LAMMPS dump defining the lattice sites. |
+| `--affineMapping <mode>` | no | `off` | Affine mapping mode: `off`, `toReference`, `toCurrent`. |
+| `--eliminateCellDeformation` | no | `false` | Eliminate cell deformation before site assignment. |
+| `--minimumImageConvention <bool>` | no | `true` | Use minimum image convention for site assignment. |
+| `--threads <int>` | no | auto | Maximum worker threads. |
+| `--help` | no | — | Print CLI help. |
 
-| Argument | Required | Description | Default |
-| --- | --- | --- | --- |
-| `<lammps_file>` | Yes | Input LAMMPS dump file (current configuration). | |
-| `[output_base]` | No | Base path for output files. | derived from input |
-| `--reference <path>` | Yes | Reference LAMMPS dump file defining the lattice sites. | |
-| `--affineMapping <mode>` | No | Affine mapping mode: `off`, `toReference`, `toCurrent`. | `off` |
-| `--eliminateCellDeformation` | No | Eliminate cell deformation before site assignment (currently a no-op in the engine). | `false` |
-| `--minimumImageConvention <bool>` | No | Use minimum image convention for site assignment. | `true` |
-| `--threads <int>` | No | Maximum worker threads. | auto |
-| `--help` | No | Print CLI help. | |
+## Exports
 
-> The current and reference configurations may (and usually do) have different atom counts -
-> that mismatch is how vacancies and interstitials are detected.
+| Output file | Exposure | Exporter → artifact |
+|---|---|---|
+| `{output_base}_wigner_seitz.parquet` | Wigner-Seitz Sites | — |
+| `{output_base}_atoms.parquet` | Wigner-Seitz Model | AtomisticExporter → glb |
 
-## Outputs
+---
 
-Two Parquet files are produced under `{output_base}_*.parquet`:
-
-- `{output_base}_wigner_seitz.parquet` - per-site / summary defect listing with
-  `main_listing` (vacancy / interstitial / antisite / occupied counts, total sites)
-  and a `per-site-properties` array.
-- `{output_base}_atoms.parquet` - per-role records (the canonical per-atom schema,
-  D-009). The rows are the reference sites plus extra interstitial occupants (a
-  synthetic frame), so vacancies - which have no current atom - are represented.
-  The `bucket` column holds the role (`Vacancy`, `Occupied`, `Interstitial`,
-  `Antisite`) and drives the `AtomisticExporter` GLB grouping. The only per-atom
-  column is `occupancy` (the count of current atoms assigned to the site).
+Full input contract and examples: https://docs.voltcloud.dev/docs/plugins
