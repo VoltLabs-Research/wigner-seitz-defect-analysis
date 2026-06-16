@@ -15,7 +15,7 @@
             "icon": "HiViewGridAdd",
             "author": "Rodolfo Herrera",
             "license": "MIT",
-            "version": "1.0.2",
+            "version": "1.0.3",
             "homepage": "https://github.com/rodyherrera/Volterra",
             "description": "Identifica vacancias, intersticiales y antisitios comparando la configuración actual con una red de referencia mediante celdas de Wigner-Seitz."
           }
