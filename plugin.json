@@ -17,50 +17,7 @@
             "license": "MIT",
             "version": "1.0.3",
             "homepage": "https://github.com/rodyherrera/Volterra",
-            "description": "Identifica vacancias, intersticiales y antisitios comparando la configuración actual con una red de referencia mediante celdas de Wigner-Seitz."
-          }
-        }
-      },
-      {
-        "id": "plugin-arguments",
-        "type": "arguments",
-        "position": {
-          "x": 528,
-          "y": 208
-        },
-        "data": {
-          "arguments": {
-            "arguments": [
-              {
-                "argument": "reference",
-                "type": "frame",
-                "label": "Reference Frame",
-                "required": true
-              },
-              {
-                "argument": "affineMapping",
-                "type": "select",
-                "label": "Affine Mapping",
-                "default": "off",
-                "options": [
-                  { "key": "off", "label": "Off" },
-                  { "key": "toReference", "label": "Map to Reference Cell" },
-                  { "key": "toCurrent", "label": "Map to Current Cell" }
-                ]
-              },
-              {
-                "argument": "eliminateCellDeformation",
-                "type": "boolean",
-                "label": "Eliminate Cell Deformation",
-                "default": false
-              },
-              {
-                "argument": "minimumImageConvention",
-                "type": "boolean",
-                "label": "Minimum Image Convention",
-                "default": true
-              }
-            ]
+            "description": "Identifica vacancias, intersticiales y antisitios comparando la configuraci\u00f3n actual con una red de referencia mediante celdas de Wigner-Seitz."
           }
         }
       },
@@ -103,7 +60,7 @@
             "binary": "wigner-seitz-defect-analysis",
             "binaryObjectPath": "__UPLOAD_BINARY_OBJECT_PATH__",
             "binaryFileName": "wigner-seitz-defect-analysis",
-            "arguments": "{{ foreach-trajectory-dumps.currentValue.path }} {{ foreach-trajectory-dumps.outputPath }} {{ plugin-arguments.as_str }}",
+            "arguments": "{{ foreach-trajectory-dumps.currentValue.path }} {{ foreach-trajectory-dumps.outputPath }}",
             "timeout": -1
           }
         }
@@ -138,7 +95,11 @@
             "results": "atoms.parquet",
             "iterable": "",
             "properties": [
-              { "key": "occupancy", "label": "Site occupancy", "type": "int" }
+              {
+                "key": "occupancy",
+                "label": "Site occupancy",
+                "type": "int"
+              }
             ]
           }
         }
@@ -159,20 +120,6 @@
       }
     ],
     "edges": [
-      {
-        "id": "edge-metadata-arguments",
-        "source": "plugin-metadata",
-        "sourceHandle": "output",
-        "target": "plugin-arguments",
-        "targetHandle": "input"
-      },
-      {
-        "id": "edge-arguments-context",
-        "source": "plugin-arguments",
-        "sourceHandle": "output",
-        "target": "trajectory-context",
-        "targetHandle": "input"
-      },
       {
         "id": "edge-context-foreach",
         "source": "trajectory-context",
@@ -207,7 +154,22 @@
         "sourceHandle": "output",
         "target": "wigner-seitz-model-export",
         "targetHandle": "input"
+      },
+      {
+        "id": "edge-plugin-metadata-trajectory-context",
+        "source": "plugin-metadata",
+        "sourceHandle": "output",
+        "target": "trajectory-context",
+        "targetHandle": "input"
       }
     ]
+  },
+  "interface": {
+    "version": 2,
+    "provides": {
+      "volt/per-atom-properties@1": {
+        "atoms": "atoms.parquet"
+      }
+    }
   }
 }
