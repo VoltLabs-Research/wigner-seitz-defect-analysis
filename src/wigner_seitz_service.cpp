@@ -125,7 +125,6 @@ json WignerSeitzService::compute(
     const std::size_t nRef = static_cast<std::size_t>(referenceFrame.natoms);
     const std::size_t nCurr = static_cast<std::size_t>(frame.natoms);
 
-    // Build the per-site summary payload (written to _wigner_seitz.parquet).
     json result = AnalysisResult::success();
     result["main_listing"] = {
         { "vacancy_count", engine.vacancyCount() },
@@ -156,8 +155,6 @@ json WignerSeitzService::compute(
     }
     result["per-site-properties"] = perSite;
 
-    // Map each current atom to the reference site it occupies. Reused for both
-    // antisite detection and the per-role record construction below.
     std::vector<std::vector<std::size_t>> occupantsBySite(nRef);
     for(std::size_t i = 0; i < nCurr; ++i){
         const std::size_t s = currentToSite[i];
@@ -166,8 +163,6 @@ json WignerSeitzService::compute(
         }
     }
 
-    // Determine antisite sites: a reference site whose occupancy is exactly
-    // one and whose sole occupant has a different particle type.
     std::vector<bool> siteIsAntisite(nRef, false);
     if(!referenceFrame.types.empty() && !frame.types.empty()){
         for(std::size_t s = 0; s < nRef; ++s){
@@ -182,18 +177,11 @@ json WignerSeitzService::compute(
         }
     }
 
-    // Build the per-role record set. Each reference site becomes one record;
-    // sites with occupancy >= 2 emit additional Interstitial records (one per
-    // extra occupant). These records (NOT the current atoms) become the rows of
-    // a SYNTHETIC frame so that vacancies - which have no current atom - are
-    // still represented in the _atoms.parquet table. bucket = role drives the
-    // four AtomisticExporter structures.
     std::vector<Point3> recPos;
     std::vector<int> recId;
     std::vector<std::string> recRole;
     std::vector<int> recOccupancy;
 
-    // Pass 1: per-site role assignment (Vacancy / Occupied / Antisite / Interstitial).
     if(occupancyProp){
         const int* occ = occupancyProp->constDataInt();
         for(std::size_t s = 0; s < nRef; ++s){
@@ -202,9 +190,6 @@ json WignerSeitzService::compute(
             const bool antisiteHere = siteIsAntisite[s];
             const std::string role = roleName(total, antisiteHere);
 
-            // Site position is the reference site, except when a single current
-            // atom sits there, in which case we expose its current position
-            // (useful for vis tooling following the occupant).
             Point3 pos;
             int atomId;
             if(total == 1 && !occupantsBySite[s].empty()){
@@ -231,8 +216,6 @@ json WignerSeitzService::compute(
         }
     }
 
-    // Pass 2: extra interstitial records for every "extra" occupant beyond the
-    // first one at sites with total occupancy >= 2.
     for(std::size_t s = 0; s < nRef; ++s){
         const auto& occupants = occupantsBySite[s];
         if(occupants.size() <= 1) continue;
@@ -254,10 +237,6 @@ json WignerSeitzService::compute(
     AnalysisResult::addTiming(result, startTime);
 
     if(!outputBase.empty()){
-        // Synthetic frame: its atoms are the W-S records (ref sites + extra
-        // interstitials), not the current atoms. streamAtomsToParquet iterates
-        // frame.natoms and reads only positions/ids, so this is what makes
-        // vacancies appear in _atoms.parquet.
         LammpsParser::Frame wsFrame;
         wsFrame.natoms = static_cast<int>(recPos.size());
         wsFrame.positions = recPos;
@@ -265,12 +244,12 @@ json WignerSeitzService::compute(
         wsFrame.simulationCell = referenceFrame.simulationCell;
 
         Plugin::serializePluginOutput(outputBase, wsFrame, result, {
-            .summaryFileSuffix = "_wigner_seitz", // <base>_wigner_seitz.parquet from `result`
-            .bucketResolver = [&recRole](std::size_t i){ return recRole[i]; }, // bucket == role
+            .summaryFileSuffix = "_wigner_seitz",
+            .bucketResolver = [&recRole](std::size_t i){ return recRole[i]; },
             .perAtomColumnWriter = [&](ColumnarAtomWriter& w, std::size_t i){
                 w.field("occupancy", recOccupancy[i]);
             }
-        }); // also writes <base>_atoms.parquet from wsFrame
+        });
     }
 
     spdlog::info(

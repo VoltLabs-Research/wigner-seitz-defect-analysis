@@ -20,10 +20,6 @@ namespace{
 
 constexpr std::size_t kInvalidSite = std::numeric_limits<std::size_t>::max();
 
-// Minimal ParticleProperty wrapper that owns a Point3 buffer. Used so we
-// can feed transformed positions to the NearestNeighborFinder, which expects
-// a PositionProperty regardless of whether the data belongs to the
-// reference or current configuration.
 std::shared_ptr<ParticleProperty> makePositionProperty(const std::vector<Point3>& source){
     auto prop = std::make_shared<ParticleProperty>(
         source.size(),
@@ -66,13 +62,6 @@ void WignerSeitzEngine::prepareMappedPositions(std::vector<Point3>& mappedPositi
     mappedPositions.resize(nCurr);
     const Point3* src = _positions->constDataPoint3();
 
-    // Affine mapping policy mirrors OVITO's WignerSeitzAnalysisModifier.
-    //  - Off:          copy positions verbatim.
-    //  - ToReference:  reduced in current cell -> absolute in reference cell.
-    //  - ToCurrent:    reduced in current cell -> absolute in current cell,
-    //                  meaning no transform on current atoms; the reference
-    //                  cell is the one that gets mapped when the finder is
-    //                  built (handled by the caller when applicable).
     const bool mapIntoReference = (_affineMapping == AffineMappingType::ToReference);
 
     if(!mapIntoReference){
@@ -82,10 +71,6 @@ void WignerSeitzEngine::prepareMappedPositions(std::vector<Point3>& mappedPositi
         return;
     }
 
-    // Mapping into the reference cell. When "eliminate cell deformation" is
-    // on, the reference cell matrix replaces the current one for the
-    // reduced-to-absolute step, which effectively normalises away any
-    // uniform cell deformation before assigning sites.
     const AffineTransformation currInv = _simCell.inverseMatrix();
     const AffineTransformation refMat = _simCellRef.matrix();
 
@@ -102,7 +87,7 @@ void WignerSeitzEngine::prepareMappedPositions(std::vector<Point3>& mappedPositi
         mappedPositions[i] = refMat * reduced;
     }
 
-    (void)_eliminateCellDeformation; // Reserved for future per-site remapping.
+    (void)_eliminateCellDeformation;
 }
 
 void WignerSeitzEngine::perform(){
@@ -126,8 +111,6 @@ void WignerSeitzEngine::perform(){
         return;
     }
 
-    // Use the explicit (count, DataType, componentCount, stride, init) ctor
-    // because UserProperty maps to DataType::Void which rejects components>0.
     _occupancy = std::make_shared<ParticleProperty>(
         nRef, Particles::DataType::Int, 1, 0, true
     );
@@ -137,17 +120,10 @@ void WignerSeitzEngine::perform(){
     );
     _siteIdentifier->setType(ParticleProperty::IdentifierProperty);
 
-    // Fill site identifiers with the reference atom index (0..nRef-1) so
-    // downstream consumers keep a stable reference.
     for(std::size_t i = 0; i < nRef; ++i){
         _siteIdentifier->setInt64(i, static_cast<std::int64_t>(i));
     }
 
-    // The NearestNeighborFinder operates on a ParticleProperty + a
-    // SimulationCell. Depending on affineMapping we either:
-    //   - build it on the reference positions/cell (Off, ToReference), or
-    //   - build it on reference positions remapped into the current cell
-    //     (ToCurrent).
     std::vector<Point3> mappedRef;
     ParticleProperty* finderPositions = _refPositions;
     SimulationCell finderCell = _simCellRef;
@@ -180,11 +156,9 @@ void WignerSeitzEngine::perform(){
         throw std::runtime_error("WignerSeitzEngine: failed to build nearest-neighbor finder on reference sites.");
     }
 
-    // Prepare mapped current positions.
     std::vector<Point3> mappedCurrent;
     prepareMappedPositions(mappedCurrent);
 
-    // Atomic counters driving thread-safe occupancy updates.
     std::vector<std::atomic<int>> atomicOccupancy(nRef);
     for(auto& c : atomicOccupancy) c.store(0, std::memory_order_relaxed);
 
@@ -196,15 +170,8 @@ void WignerSeitzEngine::perform(){
     tbb::parallel_for(
         tbb::blocked_range<std::size_t>(0, nCurr, 1024),
         [&](const tbb::blocked_range<std::size_t>& r){
-            // CoreToolkit instantiates Query<{4,16,18,32,64,128}>; use 4 and
-            // take only the nearest result.
             NearestNeighborFinder::Query<4> q(finder);
             for(std::size_t i = r.begin(); i < r.end(); ++i){
-                // includeSelf=true is REQUIRED: with includeSelf=false the finder
-                // silently skips zero-distance hits, so a current atom sitting
-                // exactly on a reference site (the common case when the current
-                // config is a perfect lattice minus defects) would be assigned
-                // to the second-nearest site instead of its correct site.
                 q.findNeighbors(mappedCurrent[i], /*includeSelf=*/true);
                 const auto& res = q.results();
                 if(res.size() == 0) continue;
@@ -223,13 +190,11 @@ void WignerSeitzEngine::perform(){
         }
     );
 
-    // Commit atomic occupancy into the output property.
     int* occData = _occupancy->dataInt();
     for(std::size_t i = 0; i < nRef; ++i){
         occData[i] = atomicOccupancy[i].load(std::memory_order_relaxed);
     }
 
-    // Tally site statistics.
     for(std::size_t i = 0; i < nRef; ++i){
         const int total = occData[i];
         if(total == 0){

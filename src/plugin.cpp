@@ -8,16 +8,10 @@
 
 using namespace Volt;
 
-// Wigner-Seitz needs a reference configuration whose site count generally
-// DIFFERS from the current atom count (that mismatch is precisely how
-// vacancies and interstitials are detected). The framework's
-// needsReferenceFrame path in plugin_main.h fatally rejects
-// refFrame.natoms != frame.natoms, so we deliberately keep
-// needsReferenceFrame = false and parse --reference ourselves below.
 static WignerSeitzEngine::AffineMappingType parseAffineMapping(const std::string& s){
     if(s == "toReference" || s == "toReferenceCell") return WignerSeitzEngine::AffineMappingType::ToReference;
     if(s == "toCurrent" || s == "toCurrentCell") return WignerSeitzEngine::AffineMappingType::ToCurrent;
-    return WignerSeitzEngine::AffineMappingType::Off; // off | none | noMapping
+    return WignerSeitzEngine::AffineMappingType::Off;
 }
 
 static const Volt::Plugin::PluginDescriptor descriptor{
@@ -29,8 +23,6 @@ static const Volt::Plugin::PluginDescriptor descriptor{
         {"--eliminateCellDeformation", "bool", "Eliminate cell deformation before site assignment", "false"},
         {"--minimumImageConvention", "bool", "Use minimum image convention for site assignment", "true"},
     },
-    // CHOICE 1: see comment above. The reference frame is parsed manually in
-    // the run lambda so the natoms-match guard never runs.
     .needsReferenceFrame = false
 };
 
@@ -38,7 +30,6 @@ VOLT_PLUGIN_MAIN(descriptor,
     [](const auto& opts, const LammpsParser::Frame& frame,
        const LammpsParser::Frame* /*refFramePtr: unused, guard bypassed*/,
        const std::string& outputBase) -> Volt::Plugin::json {
-        // Resolve the reference dump path from the --reference flag.
         std::string refFile = CLI::getString(opts, "--reference");
         if(refFile.empty()){
             return AnalysisResult::failure(

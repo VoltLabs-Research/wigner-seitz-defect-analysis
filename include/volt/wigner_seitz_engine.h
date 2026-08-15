@@ -9,21 +9,6 @@
 
 namespace Volt{
 
-/**
- * Wigner-Seitz Defect Analysis engine.
- *
- * Counts how many "current" atoms fall inside each Wigner-Seitz cell defined
- * by a reference configuration. Sites whose occupancy is zero are vacancies,
- * sites whose occupancy is greater than one indicate interstitials. When
- * particle-type information is available for both configurations, atoms that
- * fall in a reference site whose type does not match their own are flagged
- * as antisites.
- *
- * The implementation follows the approach used by OVITO's
- * WignerSeitzAnalysisModifier: build a spatial index (k=1 nearest neighbour
- * finder) on the reference positions and assign each current atom to the
- * closest reference site.
- */
 class WignerSeitzEngine{
 public:
     enum class AffineMappingType{
@@ -46,21 +31,14 @@ public:
 
     void perform();
 
-    // Occupancy per reference site (scalar count of current atoms assigned to
-    // each Wigner-Seitz cell).
     std::shared_ptr<Particles::ParticleProperty> occupancy() const{
         return _occupancy;
     }
 
-    // Parallel to the reference positions: the site identifier is the index
-    // of the reference atom so downstream consumers can re-associate the
-    // result with the reference configuration.
     std::shared_ptr<Particles::ParticleProperty> siteIdentifier() const{
         return _siteIdentifier;
     }
 
-    // For each current atom, the index of the reference site it was
-    // assigned to (std::numeric_limits<std::size_t>::max() on failure).
     const std::vector<std::size_t>& currentToSite() const{
         return _currentToSite;
     }
@@ -71,8 +49,6 @@ public:
     std::size_t occupiedCount() const{ return _occupiedCount; }
 
 private:
-    // Build the list of current positions transformed into the reference
-    // cell (or into the current cell depending on the affine mapping mode).
     void prepareMappedPositions(std::vector<Point3>& mappedPositions) const;
 
     Particles::ParticleProperty* _positions = nullptr;
