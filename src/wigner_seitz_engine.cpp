@@ -16,8 +16,6 @@ namespace Volt{
 
 using namespace Particles;
 
-namespace{
-
 constexpr std::size_t kInvalidSite = std::numeric_limits<std::size_t>::max();
 
 std::shared_ptr<ParticleProperty> makePositionProperty(const std::vector<Point3>& source){
@@ -32,8 +30,6 @@ std::shared_ptr<ParticleProperty> makePositionProperty(const std::vector<Point3>
         std::memcpy(dst, source.data(), source.size() * sizeof(Point3));
     }
     return prop;
-}
-
 }
 
 WignerSeitzEngine::WignerSeitzEngine(

@@ -14,8 +14,6 @@ namespace Volt{
 
 using namespace Volt::Particles;
 
-namespace{
-
 std::shared_ptr<ParticleProperty> maybeCreateTypeProperty(const LammpsParser::Frame& frame){
     if(frame.types.empty() || frame.natoms <= 0){
         return nullptr;
@@ -39,8 +37,6 @@ std::string roleName(int siteOccupancy, bool isAntisite){
     if(isAntisite) return "Antisite";
     if(siteOccupancy == 1) return "Occupied";
     return "Interstitial";
-}
-
 }
 
 WignerSeitzService::WignerSeitzService()
