@@ -177,6 +177,16 @@ json WignerSeitzService::compute(
     std::vector<int> recId;
     std::vector<std::string> recRole;
     std::vector<int> recOccupancy;
+    std::vector<int> recSiteIndex;
+    std::vector<int> recSiteId;
+    std::vector<int> recSiteType;
+
+    const auto pushSite = [&](std::size_t s){
+        recSiteIndex.push_back(static_cast<int>(s));
+        recSiteId.push_back(s < referenceFrame.ids.size()
+            ? referenceFrame.ids[s] : static_cast<int>(s));
+        recSiteType.push_back(s < referenceFrame.types.size() ? referenceFrame.types[s] : 0);
+    };
 
     if(occupancyProp){
         const int* occ = occupancyProp->constDataInt();
@@ -209,6 +219,7 @@ json WignerSeitzService::compute(
             recId.push_back(atomId);
             recRole.push_back(role);
             recOccupancy.push_back(total);
+            pushSite(s);
         }
     }
 
@@ -227,6 +238,7 @@ json WignerSeitzService::compute(
             recId.push_back(atomId);
             recRole.push_back("Interstitial");
             recOccupancy.push_back(static_cast<int>(occupants.size()));
+            pushSite(s);
         }
     }
 
@@ -244,6 +256,9 @@ json WignerSeitzService::compute(
             .bucketResolver = [&recRole](std::size_t i){ return recRole[i]; },
             .perAtomColumnWriter = [&](ColumnarAtomWriter& w, std::size_t i){
                 w.field("occupancy", recOccupancy[i]);
+                w.field("site_index", recSiteIndex[i]);
+                w.field("site_identifier", recSiteId[i]);
+                w.field("site_type", recSiteType[i]);
             }
         });
     }
