@@ -4,6 +4,7 @@
 #include <volt/core/analysis_result.h>
 #include <volt/plugin/output_serializer.h>
 #include <volt/utilities/parquet_atom_writer.h>
+#include <volt/core/progress.h>
 #include <spdlog/spdlog.h>
 
 #include <chrono>
@@ -129,6 +130,19 @@ json WignerSeitzService::compute(
     const std::size_t nRef = static_cast<std::size_t>(referenceFrame.natoms);
     const std::size_t nCurr = static_cast<std::size_t>(frame.natoms);
 
+    spdlog::info(
+        "Defects: {} vacancies ({:.3g}% of sites), {} interstitials, {} antisites; {} of {} sites occupied",
+        engine.vacancyCount(),
+        percentOf(engine.vacancyCount(), nRef),
+        engine.interstitialCount(),
+        engine.antisiteCount(),
+        engine.occupiedCount(),
+        nRef
+    );
+
+    spdlog::info("Building per-site output for {} sites...", nRef);
+    const Stopwatch outputTimer;
+
     json result = AnalysisResult::success();
     result["main_listing"] = {
         { "vacancy_count", engine.vacancyCount() },
@@ -249,6 +263,7 @@ json WignerSeitzService::compute(
             pushSite(s);
         }
     }
+    spdlog::info("Per-site output ready in {} ({} records)", outputTimer.elapsed(), recPos.size());
 
     AnalysisResult::addTiming(result, startTime);
 
@@ -270,14 +285,6 @@ json WignerSeitzService::compute(
             }
         });
     }
-
-    spdlog::info(
-        "Wigner-Seitz finished: vacancies={}, interstitials={}, antisites={}, occupied_sites={}.",
-        engine.vacancyCount(),
-        engine.interstitialCount(),
-        engine.antisiteCount(),
-        engine.occupiedCount()
-    );
 
     return result;
 }
