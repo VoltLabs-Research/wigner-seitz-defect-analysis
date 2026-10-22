@@ -39,6 +39,14 @@ std::string roleName(int siteOccupancy, bool isAntisite){
     return "Interstitial";
 }
 
+static const char* affineMappingName(WignerSeitzEngine::AffineMappingType mode){
+    switch(mode){
+        case WignerSeitzEngine::AffineMappingType::ToReference: return "toReference";
+        case WignerSeitzEngine::AffineMappingType::ToCurrent: return "toCurrent";
+        default: return "off";
+    }
+}
+
 WignerSeitzService::WignerSeitzService()
     : _affineMapping(WignerSeitzEngine::AffineMappingType::Off),
       _eliminateCellDeformation(false),
@@ -93,7 +101,7 @@ json WignerSeitzService::compute(
         "Starting Wigner-Seitz analysis (ref_sites={}, current_atoms={}, affine={}, mic={})...",
         referenceFrame.natoms,
         frame.natoms,
-        static_cast<int>(_affineMapping),
+        affineMappingName(_affineMapping),
         _useMinimumImageConvention ? "true" : "false"
     );
 
