@@ -3,6 +3,7 @@
 #include <volt/wigner_seitz_engine.h>
 #include <volt/core/analysis_result.h>
 #include <volt/core/lammps_parser.h>
+#include <volt/core/progress.h>
 
 #include <string>
 
@@ -39,10 +40,12 @@ VOLT_PLUGIN_MAIN(descriptor,
         LammpsParser::Frame referenceFrame;
         LammpsParser refParser;
         spdlog::info("Parsing reference frame: {}", refFile);
+        const Stopwatch refTimer;
         if(!refParser.parseFile(refFile, referenceFrame)){
             return AnalysisResult::failure("Failed to parse reference frame: " + refFile);
         }
-        spdlog::info("Reference loaded: {} sites.", referenceFrame.natoms);
+        spdlog::info("Reference loaded: {} sites (timestep {}) in {}.",
+            referenceFrame.natoms, referenceFrame.timestep, refTimer.elapsed());
 
         WignerSeitzService svc;
         svc.setAffineMapping(parseAffineMapping(CLI::getString(opts, "--affineMapping", "off")));
