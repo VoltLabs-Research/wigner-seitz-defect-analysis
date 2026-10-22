@@ -1,5 +1,7 @@
 #include <volt/wigner_seitz_engine.h>
 #include <volt/analysis/nearest_neighbor_finder.h>
+#include <volt/core/progress.h>
+#include <spdlog/spdlog.h>
 
 #include <algorithm>
 #include <atomic>
@@ -147,10 +149,13 @@ void WignerSeitzEngine::perform(){
         finderCell = _simCell;
     }
 
+    spdlog::info("Building nearest-site lookup over {} reference sites...", nRef);
+    Stopwatch timer;
     NearestNeighborFinder finder(1);
     if(!finder.prepare(finderPositions, finderCell)){
         throw std::runtime_error("WignerSeitzEngine: failed to build nearest-neighbor finder on reference sites.");
     }
+    spdlog::info("Site lookup ready in {}", timer.elapsed());
 
     std::vector<Point3> mappedCurrent;
     prepareMappedPositions(mappedCurrent);
@@ -163,6 +168,8 @@ void WignerSeitzEngine::perform(){
     const int* currTypes = (_types ? _types->constDataInt() : nullptr);
     const int* refTypesPtr = (_refTypes ? _refTypes->constDataInt() : nullptr);
 
+    spdlog::info("Assigning {} atoms to their nearest reference site...", nCurr);
+    ProgressReporter progress("Assigning atoms to sites", nCurr);
     tbb::parallel_for(
         tbb::blocked_range<std::size_t>(0, nCurr, 1024),
         [&](const tbb::blocked_range<std::size_t>& r){
@@ -183,6 +190,7 @@ void WignerSeitzEngine::perform(){
                     }
                 }
             }
+            progress.advance(r.size());
         }
     );
 
@@ -204,6 +212,12 @@ void WignerSeitzEngine::perform(){
     }
 
     _antisiteCount = antisiteLocal.load(std::memory_order_relaxed);
+
+    const std::size_t assigned = _occupiedCount + _interstitialCount;
+    spdlog::info("Assigned {} atoms in {}", assigned, progress.elapsed());
+    if(assigned < nCurr){
+        spdlog::warn("{} atoms could not be assigned to a reference site", nCurr - assigned);
+    }
 }
 
 }
