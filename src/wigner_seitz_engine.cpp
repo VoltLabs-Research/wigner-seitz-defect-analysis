@@ -96,6 +96,10 @@ void WignerSeitzEngine::perform(){
     const std::size_t nCurr = _positions->size();
     const std::size_t nRef = _refPositions->size();
 
+    if(_eliminateCellDeformation){
+        spdlog::warn("eliminateCellDeformation has no effect in this implementation; affineMapping alone controls cell mapping");
+    }
+
     _vacancyCount = 0;
     _interstitialCount = 0;
     _antisiteCount = 0;
