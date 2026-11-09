@@ -106,6 +106,8 @@ json WignerSeitzService::compute(
         _useMinimumImageConvention ? "true" : "false"
     );
 
+    // Site assignment, the per-site records, then the outputs, whose summary holds every site.
+    ProgressSteps steps({1.0, 2.0, 3.0});
     WignerSeitzEngine engine(
         positions.get(),
         types.get(),
@@ -123,6 +125,7 @@ json WignerSeitzService::compute(
     }catch(const std::exception& ex){
         return AnalysisResult::failure(std::string("Wigner-Seitz engine failed: ") + ex.what());
     }
+    steps.next();
 
     auto occupancyProp = engine.occupancy();
     const auto& currentToSite = engine.currentToSite();
@@ -264,6 +267,7 @@ json WignerSeitzService::compute(
         }
     }
     spdlog::info("Per-site output ready in {} ({} records)", outputTimer.elapsed(), recPos.size());
+    steps.next();
 
     AnalysisResult::addTiming(result, startTime);
 

@@ -153,6 +153,8 @@ void WignerSeitzEngine::perform(){
         finderCell = _simCell;
     }
 
+    // The serial nearest-site index, then assigning the atoms to sites.
+    ProgressSteps steps({2.0, 1.0});
     spdlog::info("Building nearest-site lookup over {} reference sites...", nRef);
     Stopwatch timer;
     NearestNeighborFinder finder(1);
@@ -160,6 +162,7 @@ void WignerSeitzEngine::perform(){
         throw std::runtime_error("WignerSeitzEngine: failed to build nearest-neighbor finder on reference sites.");
     }
     spdlog::info("Site lookup ready in {}", timer.elapsed());
+    steps.next();
 
     std::vector<Point3> mappedCurrent;
     prepareMappedPositions(mappedCurrent);
