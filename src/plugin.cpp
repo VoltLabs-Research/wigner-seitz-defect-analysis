@@ -37,6 +37,9 @@ VOLT_PLUGIN_MAIN(descriptor,
                 "--reference is required for Wigner-Seitz defect analysis");
         }
 
+        // Reading the reference sites, then the analysis.
+        ProgressSteps steps({1.0, 5.0});
+        JobProgress::instance().setText("Reading the reference frame");
         LammpsParser::Frame referenceFrame;
         LammpsParser refParser;
         spdlog::info("Parsing reference frame: {}", refFile);
@@ -46,6 +49,7 @@ VOLT_PLUGIN_MAIN(descriptor,
         }
         spdlog::info("Reference loaded: {} sites (timestep {}) in {}.",
             referenceFrame.natoms, referenceFrame.timestep, refTimer.elapsed());
+        steps.next();
 
         WignerSeitzService svc;
         svc.setAffineMapping(parseAffineMapping(CLI::getString(opts, "--affineMapping", "off")));
