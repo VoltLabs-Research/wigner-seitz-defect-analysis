@@ -12,6 +12,7 @@
           "modifier": {
             "name": "Wigner-Seitz Defect Analysis",
             "key": "wigner-seitz-defect-analysis",
+            "category": "Defects",
             "icon": "HiViewGridAdd",
             "author": "Rodolfo Herrera",
             "license": "MIT",
