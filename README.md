@@ -5,6 +5,7 @@ Identifies vacancies, interstitials and antisites by comparing the current confi
 ## Install
 
 ```bash
+npm install -g @voltstack/vpm
 vpm install @voltlabs/wigner-seitz-defect-analysis
 ```
 
