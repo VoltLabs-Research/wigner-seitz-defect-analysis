@@ -3,20 +3,17 @@
 #include <volt/core/volt.h>
 #include <volt/core/simulation_cell.h>
 #include <volt/core/particle_property.h>
+#include <volt/analysis/reference_configuration.h>
 
 #include <memory>
 #include <vector>
 
 namespace Volt{
 
+class WignerSeitzLog;
+
 class WignerSeitzEngine{
 public:
-    enum class AffineMappingType{
-        Off = 0,
-        ToReference,
-        ToCurrent
-    };
-
     WignerSeitzEngine(
         Particles::ParticleProperty* positions,
         Particles::ParticleProperty* types,
@@ -24,12 +21,12 @@ public:
         Particles::ParticleProperty* refPositions,
         Particles::ParticleProperty* refTypes,
         const Particles::SimulationCell& refCell,
-        AffineMappingType affineMapping = AffineMappingType::Off,
+        AffineMapping affineMapping = AffineMapping::NoMapping,
         bool eliminateCellDeformation = false,
         bool useMinimumImageConvention = true
     );
 
-    void perform();
+    void perform(WignerSeitzLog& log);
 
     std::shared_ptr<Particles::ParticleProperty> occupancy() const{
         return _occupancy;
@@ -50,6 +47,7 @@ public:
 
 private:
     void prepareMappedPositions(std::vector<Point3>& mappedPositions) const;
+    static std::shared_ptr<Particles::ParticleProperty> makePositionProperty(const std::vector<Point3>& source);
 
     Particles::ParticleProperty* _positions = nullptr;
     Particles::ParticleProperty* _types = nullptr;
@@ -59,7 +57,7 @@ private:
     Particles::SimulationCell _simCell;
     Particles::SimulationCell _simCellRef;
 
-    AffineMappingType _affineMapping = AffineMappingType::Off;
+    AffineMapping _affineMapping = AffineMapping::NoMapping;
     bool _eliminateCellDeformation = false;
     bool _useMinimumImageConvention = true;
 

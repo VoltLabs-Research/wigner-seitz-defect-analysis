@@ -1,11 +1,11 @@
 #include <volt/wigner_seitz_service.h>
 #include <volt/wigner_seitz_engine.h>
+#include <volt/wigner_seitz_log.h>
 #include <volt/core/frame_adapter.h>
 #include <volt/core/analysis_result.h>
 #include <volt/plugin/output_serializer.h>
 #include <volt/utilities/parquet_atom_writer.h>
 #include <volt/core/progress.h>
-#include <spdlog/spdlog.h>
 
 #include <chrono>
 #include <string>
@@ -15,7 +15,7 @@ namespace Volt{
 
 using namespace Volt::Particles;
 
-std::shared_ptr<ParticleProperty> maybeCreateTypeProperty(const LammpsParser::Frame& frame){
+std::shared_ptr<ParticleProperty> WignerSeitzService::maybeCreateTypeProperty(const LammpsParser::Frame& frame){
     if(frame.types.empty() || frame.natoms <= 0){
         return nullptr;
     }
@@ -33,27 +33,19 @@ std::shared_ptr<ParticleProperty> maybeCreateTypeProperty(const LammpsParser::Fr
     return prop;
 }
 
-std::string roleName(int siteOccupancy, bool isAntisite){
+std::string WignerSeitzService::roleName(int siteOccupancy, bool isAntisite){
     if(siteOccupancy == 0) return "Vacancy";
     if(isAntisite) return "Antisite";
     if(siteOccupancy == 1) return "Occupied";
     return "Interstitial";
 }
 
-static const char* affineMappingName(WignerSeitzEngine::AffineMappingType mode){
-    switch(mode){
-        case WignerSeitzEngine::AffineMappingType::ToReference: return "toReference";
-        case WignerSeitzEngine::AffineMappingType::ToCurrent: return "toCurrent";
-        default: return "off";
-    }
-}
-
 WignerSeitzService::WignerSeitzService()
-    : _affineMapping(WignerSeitzEngine::AffineMappingType::Off),
+    : _affineMapping(AffineMapping::NoMapping),
       _eliminateCellDeformation(false),
       _useMinimumImageConvention(true){}
 
-void WignerSeitzService::setAffineMapping(WignerSeitzEngine::AffineMappingType mode){
+void WignerSeitzService::setAffineMapping(AffineMapping mode){
     _affineMapping = mode;
 }
 
@@ -68,6 +60,7 @@ void WignerSeitzService::setMinimumImageConvention(bool enabled){
 json WignerSeitzService::compute(
     const LammpsParser::Frame& frame,
     const LammpsParser::Frame& referenceFrame,
+    WignerSeitzLog& log,
     const std::string& outputBase
 ){
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -98,16 +91,11 @@ json WignerSeitzService::compute(
     auto types = maybeCreateTypeProperty(frame);
     auto refTypes = maybeCreateTypeProperty(referenceFrame);
 
-    spdlog::info(
-        "Starting Wigner-Seitz analysis (ref_sites={}, current_atoms={}, affine={}, mic={})...",
-        referenceFrame.natoms,
-        frame.natoms,
-        affineMappingName(_affineMapping),
-        _useMinimumImageConvention ? "true" : "false"
-    );
-
-    // Site assignment, the per-site records, then the outputs, whose summary holds every site.
-    ProgressSteps steps({1.0, 2.0, 3.0});
+    ProgressSteps steps({
+        {"Assigning atoms to sites", 1.0},
+        {"Building per-site output", 2.0},
+        {"Writing outputs", 3.0},
+    });
     WignerSeitzEngine engine(
         positions.get(),
         types.get(),
@@ -121,10 +109,11 @@ json WignerSeitzService::compute(
     );
 
     try{
-        engine.perform();
+        engine.perform(log);
     }catch(const std::exception& ex){
         return AnalysisResult::failure(std::string("Wigner-Seitz engine failed: ") + ex.what());
     }
+    log.dump(engine);
     steps.next();
 
     auto occupancyProp = engine.occupancy();
@@ -132,19 +121,6 @@ json WignerSeitzService::compute(
 
     const std::size_t nRef = static_cast<std::size_t>(referenceFrame.natoms);
     const std::size_t nCurr = static_cast<std::size_t>(frame.natoms);
-
-    spdlog::info(
-        "Defects: {} vacancies ({:.3g}% of sites), {} interstitials, {} antisites; {} of {} sites occupied",
-        engine.vacancyCount(),
-        percentOf(engine.vacancyCount(), nRef),
-        engine.interstitialCount(),
-        engine.antisiteCount(),
-        engine.occupiedCount(),
-        nRef
-    );
-
-    spdlog::info("Building per-site output for {} sites...", nRef);
-    const Stopwatch outputTimer;
 
     json result = AnalysisResult::success();
     result["main_listing"] = {
@@ -198,19 +174,13 @@ json WignerSeitzService::compute(
         }
     }
 
-    std::vector<Point3> recPos;
-    std::vector<int> recId;
-    std::vector<std::string> recRole;
-    std::vector<int> recOccupancy;
-    std::vector<int> recSiteIndex;
-    std::vector<int> recSiteId;
-    std::vector<int> recSiteType;
+    SiteRecords records;
 
     const auto pushSite = [&](std::size_t s){
-        recSiteIndex.push_back(static_cast<int>(s));
-        recSiteId.push_back(s < referenceFrame.ids.size()
+        records.siteIndex.push_back(static_cast<int>(s));
+        records.siteId.push_back(s < referenceFrame.ids.size()
             ? referenceFrame.ids[s] : static_cast<int>(s));
-        recSiteType.push_back(s < referenceFrame.types.size() ? referenceFrame.types[s] : 0);
+        records.siteType.push_back(s < referenceFrame.types.size() ? referenceFrame.types[s] : 0);
     };
 
     if(occupancyProp){
@@ -240,10 +210,10 @@ json WignerSeitzService::compute(
                     : static_cast<int>(s);
             }
 
-            recPos.push_back(pos);
-            recId.push_back(atomId);
-            recRole.push_back(role);
-            recOccupancy.push_back(total);
+            records.positions.push_back(pos);
+            records.ids.push_back(atomId);
+            records.roles.push_back(role);
+            records.occupancy.push_back(total);
             pushSite(s);
         }
     }
@@ -259,33 +229,33 @@ json WignerSeitzService::compute(
             const int atomId = (occupant < frame.ids.size())
                 ? frame.ids[occupant]
                 : static_cast<int>(occupant);
-            recPos.push_back(pos);
-            recId.push_back(atomId);
-            recRole.push_back("Interstitial");
-            recOccupancy.push_back(static_cast<int>(occupants.size()));
+            records.positions.push_back(pos);
+            records.ids.push_back(atomId);
+            records.roles.push_back("Interstitial");
+            records.occupancy.push_back(static_cast<int>(occupants.size()));
             pushSite(s);
         }
     }
-    spdlog::info("Per-site output ready in {} ({} records)", outputTimer.elapsed(), recPos.size());
+    log.dump(records);
     steps.next();
 
     AnalysisResult::addTiming(result, startTime);
 
     if(!outputBase.empty()){
         LammpsParser::Frame wsFrame;
-        wsFrame.natoms = static_cast<int>(recPos.size());
-        wsFrame.positions = recPos;
-        wsFrame.ids = recId;
+        wsFrame.natoms = static_cast<int>(records.positions.size());
+        wsFrame.positions = records.positions;
+        wsFrame.ids = records.ids;
         wsFrame.simulationCell = referenceFrame.simulationCell;
 
         Plugin::serializePluginOutput(outputBase, wsFrame, result, {
             .summaryFileSuffix = "_wigner_seitz",
-            .bucketResolver = [&recRole](std::size_t i){ return recRole[i]; },
-            .perAtomColumnWriter = [&](ColumnarAtomWriter& w, std::size_t i){
-                w.field("occupancy", recOccupancy[i]);
-                w.field("site_index", recSiteIndex[i]);
-                w.field("site_identifier", recSiteId[i]);
-                w.field("site_type", recSiteType[i]);
+            .bucketResolver = [&records](std::size_t i){ return records.roles[i]; },
+            .perAtomColumnWriter = [&records](ColumnarAtomWriter& w, std::size_t i){
+                w.field("occupancy", records.occupancy[i]);
+                w.field("site_index", records.siteIndex[i]);
+                w.field("site_identifier", records.siteId[i]);
+                w.field("site_type", records.siteType[i]);
             }
         });
     }

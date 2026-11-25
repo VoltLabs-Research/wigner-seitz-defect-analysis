@@ -1,7 +1,7 @@
 #include <volt/wigner_seitz_engine.h>
 #include <volt/analysis/nearest_neighbor_finder.h>
 #include <volt/core/progress.h>
-#include <spdlog/spdlog.h>
+#include <volt/wigner_seitz_log.h>
 
 #include <algorithm>
 #include <atomic>
@@ -20,7 +20,7 @@ using namespace Particles;
 
 constexpr std::size_t kInvalidSite = std::numeric_limits<std::size_t>::max();
 
-std::shared_ptr<ParticleProperty> makePositionProperty(const std::vector<Point3>& source){
+std::shared_ptr<ParticleProperty> WignerSeitzEngine::makePositionProperty(const std::vector<Point3>& source){
     auto prop = std::make_shared<ParticleProperty>(
         source.size(),
         ParticleProperty::PositionProperty,
@@ -41,7 +41,7 @@ WignerSeitzEngine::WignerSeitzEngine(
     ParticleProperty* refPositions,
     ParticleProperty* refTypes,
     const SimulationCell& refCell,
-    AffineMappingType affineMapping,
+    AffineMapping affineMapping,
     bool eliminateCellDeformation,
     bool useMinimumImageConvention
 )
@@ -60,7 +60,7 @@ void WignerSeitzEngine::prepareMappedPositions(std::vector<Point3>& mappedPositi
     mappedPositions.resize(nCurr);
     const Point3* src = _positions->constDataPoint3();
 
-    const bool mapIntoReference = (_affineMapping == AffineMappingType::ToReference);
+    const bool mapIntoReference = (_affineMapping == AffineMapping::ToReferenceCell);
 
     if(!mapIntoReference){
         for(std::size_t i = 0; i < nCurr; ++i){
@@ -88,17 +88,13 @@ void WignerSeitzEngine::prepareMappedPositions(std::vector<Point3>& mappedPositi
     (void)_eliminateCellDeformation;
 }
 
-void WignerSeitzEngine::perform(){
+void WignerSeitzEngine::perform(WignerSeitzLog& log){
     if(!_positions || !_refPositions){
         throw std::runtime_error("WignerSeitzEngine: null input properties.");
     }
 
     const std::size_t nCurr = _positions->size();
     const std::size_t nRef = _refPositions->size();
-
-    if(_eliminateCellDeformation){
-        spdlog::warn("eliminateCellDeformation has no effect in this implementation; affineMapping alone controls cell mapping");
-    }
 
     _vacancyCount = 0;
     _interstitialCount = 0;
@@ -131,7 +127,7 @@ void WignerSeitzEngine::perform(){
     SimulationCell finderCell = _simCellRef;
     std::shared_ptr<ParticleProperty> ownedRefPositions;
 
-    if(_affineMapping == AffineMappingType::ToCurrent){
+    if(_affineMapping == AffineMapping::ToCurrentCell){
         mappedRef.resize(nRef);
         const Point3* refPtr = _refPositions->constDataPoint3();
         const AffineTransformation refInv = _simCellRef.inverseMatrix();
@@ -153,15 +149,15 @@ void WignerSeitzEngine::perform(){
         finderCell = _simCell;
     }
 
-    // The serial nearest-site index, then assigning the atoms to sites.
-    ProgressSteps steps({2.0, 1.0});
-    spdlog::info("Building nearest-site lookup over {} reference sites...", nRef);
-    Stopwatch timer;
+    ProgressSteps steps({
+        {"Building the nearest-site lookup", 2.0},
+        {"Assigning atoms to sites", 1.0},
+    });
     NearestNeighborFinder finder(1);
     if(!finder.prepare(finderPositions, finderCell)){
         throw std::runtime_error("WignerSeitzEngine: failed to build nearest-neighbor finder on reference sites.");
     }
-    spdlog::info("Site lookup ready in {}", timer.elapsed());
+    log.dump(finder);
     steps.next();
 
     std::vector<Point3> mappedCurrent;
@@ -175,7 +171,6 @@ void WignerSeitzEngine::perform(){
     const int* currTypes = (_types ? _types->constDataInt() : nullptr);
     const int* refTypesPtr = (_refTypes ? _refTypes->constDataInt() : nullptr);
 
-    spdlog::info("Assigning {} atoms to their nearest reference site...", nCurr);
     ProgressReporter progress("Assigning atoms to sites", nCurr);
     tbb::parallel_for(
         tbb::blocked_range<std::size_t>(0, nCurr, 1024),
@@ -219,12 +214,6 @@ void WignerSeitzEngine::perform(){
     }
 
     _antisiteCount = antisiteLocal.load(std::memory_order_relaxed);
-
-    const std::size_t assigned = _occupiedCount + _interstitialCount;
-    spdlog::info("Assigned {} atoms in {}", assigned, progress.elapsed());
-    if(assigned < nCurr){
-        spdlog::warn("{} atoms could not be assigned to a reference site", nCurr - assigned);
-    }
 }
 
 }

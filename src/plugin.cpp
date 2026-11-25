@@ -1,6 +1,7 @@
 #include <volt/plugin/plugin_main.h>
 #include <volt/wigner_seitz_service.h>
 #include <volt/wigner_seitz_engine.h>
+#include <volt/wigner_seitz_log.h>
 #include <volt/core/analysis_result.h>
 #include <volt/core/lammps_parser.h>
 #include <volt/core/progress.h>
@@ -8,12 +9,6 @@
 #include <string>
 
 using namespace Volt;
-
-static WignerSeitzEngine::AffineMappingType parseAffineMapping(const std::string& s){
-    if(s == "toReference" || s == "toReferenceCell") return WignerSeitzEngine::AffineMappingType::ToReference;
-    if(s == "toCurrent" || s == "toCurrentCell") return WignerSeitzEngine::AffineMappingType::ToCurrent;
-    return WignerSeitzEngine::AffineMappingType::Off;
-}
 
 static const Volt::Plugin::PluginDescriptor descriptor{
     .name = "volt-wigner-seitz",
@@ -24,37 +19,36 @@ static const Volt::Plugin::PluginDescriptor descriptor{
         {"--eliminateCellDeformation", "bool", "Eliminate cell deformation before site assignment", "false"},
         {"--minimumImageConvention", "bool", "Use minimum image convention for site assignment", "true"},
     },
-    .needsReferenceFrame = false
+    .needsReferenceFrame = false,
+    .referenceAtomCount = Volt::Plugin::ReferenceAtomCount::Any
 };
 
 VOLT_PLUGIN_MAIN(descriptor,
     [](const auto& opts, const LammpsParser::Frame& frame,
-       const LammpsParser::Frame* /*refFramePtr: unused, guard bypassed*/,
+       const LammpsParser::Frame* referenceFrame,
        const std::string& outputBase) -> Volt::Plugin::json {
-        std::string refFile = CLI::getString(opts, "--reference");
-        if(refFile.empty()){
+        if(!referenceFrame){
             return AnalysisResult::failure(
                 "--reference is required for Wigner-Seitz defect analysis");
         }
 
-        // Reading the reference sites, then the analysis.
-        ProgressSteps steps({1.0, 5.0});
-        JobProgress::instance().setText("Reading the reference frame");
-        LammpsParser::Frame referenceFrame;
-        LammpsParser refParser;
-        spdlog::info("Parsing reference frame: {}", refFile);
-        const Stopwatch refTimer;
-        if(!refParser.parseFile(refFile, referenceFrame)){
-            return AnalysisResult::failure("Failed to parse reference frame: " + refFile);
-        }
-        spdlog::info("Reference loaded: {} sites (timestep {}) in {}.",
-            referenceFrame.natoms, referenceFrame.timestep, refTimer.elapsed());
+        // pluginMain has read the reference; its step stays so that the job's progress values do not move.
+        ProgressSteps steps({
+            {"Reading the reference frame", 1.0},
+            {"Running the Wigner-Seitz analysis", 5.0},
+        });
         steps.next();
+        WignerSeitzLog log;
+
+        const bool eliminateCellDeformation = CLI::getBool(opts, "--eliminateCellDeformation", false);
+        if(eliminateCellDeformation){
+            spdlog::warn("eliminateCellDeformation has no effect in this implementation; affineMapping alone controls cell mapping");
+        }
 
         WignerSeitzService svc;
-        svc.setAffineMapping(parseAffineMapping(CLI::getString(opts, "--affineMapping", "off")));
-        svc.setEliminateCellDeformation(CLI::getBool(opts, "--eliminateCellDeformation", false));
+        svc.setAffineMapping(parseAffineMapping(CLI::getString(opts, "--affineMapping", "off")).value_or(AffineMapping::NoMapping));
+        svc.setEliminateCellDeformation(eliminateCellDeformation);
         svc.setMinimumImageConvention(CLI::getBool(opts, "--minimumImageConvention", true));
 
-        return svc.compute(frame, referenceFrame, outputBase);
+        return svc.compute(frame, *referenceFrame, log, outputBase);
     })
