@@ -136,16 +136,13 @@ json WignerSeitzService::compute(
     if(occupancyProp){
         const int* occ = occupancyProp->constDataInt();
         for(std::size_t i = 0; i < nRef; ++i){
-            const Point3 sitePos = (i < referenceFrame.positions.size())
-                ? referenceFrame.positions[i]
-                : Point3::Origin();
             const int siteId = (i < referenceFrame.ids.size())
                 ? referenceFrame.ids[i]
                 : static_cast<int>(i);
             json site;
             site["site_index"] = i;
             site["site_id"] = siteId;
-            site["pos"] = { sitePos.x(), sitePos.y(), sitePos.z() };
+            site["pos"] = i < referenceFrame.positions.size() ? referenceFrame.positions[i] : Point3::Origin();
             site["occupancy"] = occ[i];
             perSite.push_back(site);
         }
@@ -251,7 +248,7 @@ json WignerSeitzService::compute(
         Plugin::serializePluginOutput(outputBase, wsFrame, result, {
             .summaryFileSuffix = "_wigner_seitz",
             .bucketResolver = [&records](std::size_t i){ return records.roles[i]; },
-            .perAtomColumnWriter = [&records](ColumnarAtomWriter& w, std::size_t i){
+            .perAtomColumnWriter = [&records](ColumnarRowWriter& w, std::size_t i){
                 w.field("occupancy", records.occupancy[i]);
                 w.field("site_index", records.siteIndex[i]);
                 w.field("site_identifier", records.siteId[i]);
